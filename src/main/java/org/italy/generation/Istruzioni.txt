@@ -1,0 +1,17 @@
+*** Nuovo progetto ***
+* Lavorerà su un nuovo DB con impiegati e dipartimenti
+* impiegati: id, nome, cognome, data di assunzione, sesso, id dipartimento
+* dipartimento: id, nome, indirizzo, max capacity
+* 1. Creiamo le due classi impiegato e dipartimento      +++
+* 2. Creare un DepartmentRepository che avrà:            +++
+*   a. Un metodo per inserire un nuovo dipartimento      +++
+*   b. Un metodo per cancellare un dato dipartimento con un certo id       +++
+*   c. Un metodo che mi dà tutti i dipartimenti che contengono una data stringa nel nome,
+*       ma quesimt'ultimo deve anche caricare tutti gli piegati che ci lavorano              +++
+* 2a. Fare i test per tutti i metodi che riusciamo a fare
+* Quindi la classe Dipartimento avrà un Set d' impiegati e ogni Impiegato avrà un private Dipartimento
+* 3. (Opzionale) Creare due metodi per selezionare oggetti:
+*   a. Uno prende una query parametrizzata, una lambda RawMapper che descriva come mappare una riga del ResultSet e
+       l' oggetto da creare, e i var args relativi all'oggetto da creare
+*   b. Un altro prende una query parametrizzata, una lambda StatementSetter che prende in input il PreparedStatement
+       e ne setta i parametri necessari, infine la lambda RawMapper (senza i var args perché ci penserà StatementSetter)

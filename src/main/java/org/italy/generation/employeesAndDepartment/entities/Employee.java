@@ -53,4 +53,13 @@ public class Employee {
    public void setDepartment(Department department) {
       this.department = department;
    }
+   @Override
+   public String toString() {
+       return "ID: " + getId() +
+            ", Name: " + getFirstname() +
+            ", Last Name: " + getLastname() +
+            ", Enrollment Date: " + getEnrollmentDate().toString() +
+            ", Sex: " + getSex() + "\n";
+   }
+
 }

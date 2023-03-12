@@ -6,8 +6,7 @@ import org.italy.generation.employeesAndDepartment.entities.Employee;
 import org.italy.generation.employeesAndDepartment.entities.Sex;
 
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import static org.italy.generation.employeesAndDepartment.data.implementations.JDBC.JDBCConstants.
       JDBCDepartmentRepositoryConstants.*;
@@ -21,9 +20,9 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
    public long departmentInsert(Department department) throws SQLException {
       try (PreparedStatement ps = conn.prepareStatement(INSERT_DEPARTMENT_RETURNING_ID,
                                                         Statement.RETURN_GENERATED_KEYS)){
-         ps.setString(2, department.getMail());
          ps.setString(1, department.getName());
-         ps.setInt(1, department.getMaxCapacity());
+         ps.setString(2, department.getMail());
+         ps.setInt(3, department.getMaxCapacity());
          int rawUpdated =ps.executeUpdate();
          if (rawUpdated != 1){
             throw new SQLException("Errore nell'aggiunta del dipartimento");
@@ -40,17 +39,29 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
 
    @Override
    public boolean deleteDepartmentById(long id) throws SQLException {
-      try (PreparedStatement ps = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID)){
-         ps.setLong(1, id);
-         int rawUpdated =ps.executeUpdate();
-//         if (rawUpdated != 1){
-//            throw new SQLException("Errore nell'aggiunta del dipartimento");
-//         }
-         if (rawUpdated == 1){
-            return true;
+//      se il dipartimento non è presente nei dipendenti cancella direttamente
+      int rawUpdated;
+      if (hasEmployeeDepartment(id)) {
+         try (PreparedStatement ps = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID_AND_NULL_IN_EMPLOYEE)) {
+            ps.setLong(1, id);
+            ps.setLong(2, id);
+            rawUpdated = ps.executeUpdate();
+//            System.out.println("Raw updated: " + rawUpdated);
+            if (rawUpdated == 2) {
+               return true;
+            }
          }
-         return false;
+      } else {
+         try (PreparedStatement ps = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID)) {
+            ps.setLong(1, id);
+            rawUpdated = ps.executeUpdate();
+            if (rawUpdated == 1) {
+               return true;
+            }
+         }
       }
+      //se le rawUpdated non sono quelle sopra
+      return false;
    }
 
    @Override
@@ -62,20 +73,25 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
    public Iterable<Department> departmentsFromPartName(String part) throws SQLException {
       part = String.format("%%%s%%", part);
       List<Department> departmentList = new ArrayList<>();
-      try (PreparedStatement ps = conn.prepareStatement(DEPARTMENTS_FROM_PART_NAME)){
+      try (PreparedStatement ps = conn.prepareStatement(DEPARTMENTS_FROM_PART_NAME)) {
+         ps.setString(1, part);
          ResultSet rs = ps.executeQuery();
-         while(rs.next()){
-            long idMoltoBelloESimpatico = 1L;// rs.getLong("department_id");
+         while (rs.next()) {
+            long idMoltoBelloESimpatico = rs.getLong("department_id");
             boolean departmentIsPresent = departmentList.stream()
-                                                        .anyMatch(department ->
-                                                              department.getId().longValue() == idMoltoBelloESimpatico);
+                  .anyMatch(department ->
+                        department.getId().longValue() == idMoltoBelloESimpatico);
             //secondo intellij tornerà sempre falso, secondo me è scemo
-            if(departmentIsPresent){
-               for (int i = 0; i < departmentList.size(); i++){
-                  //aggiungo al departament il suo impiegato
-                  departmentList.get(i).addEmployee(employeeFromRawWithoutDepartment(rs));
-                  //all'ultimo impiegato aggiunto ↑ gli setto il suo department (puntatore del dep...)
-                  departmentList.get(i).getEmployees().last().setDepartment(departmentList.get(i));
+            if (departmentIsPresent) {
+               if ((Long) rs.getLong("employee_id") != null) {
+                  for (int i = 0; i < departmentList.size(); i++) {
+                     Employee e = employeeFromRawWithoutDepartment(rs);
+                     e.setDepartment(departmentList.get(i));
+                     //aggiungo al departament il suo impiegato
+                     departmentList.get(i).addEmployee(e);
+//                  //all'ultimo impiegato aggiunto ↑ gli setto il suo department (puntatore del dep...)
+//                  departmentList.get(i).getEmployees().last().setDepartment(departmentList.get(i));
+                  }
                }
             } else {
                //aggiungo il nuovo department nella lista di department
@@ -88,11 +104,17 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
    }
 
    private Employee employeeFromRawWithoutDepartment(ResultSet rs) throws SQLException {    //employee_id, firstname, lastname, enrollment_date, sex, department_id
+      Sex sexy = Sex.UNDEFINED;
+      if(rs.getObject("sex").toString().equalsIgnoreCase("male")){
+         sexy = Sex.MALE;
+      } else if (rs.getObject("sex").toString().equalsIgnoreCase("female")) {
+         sexy = Sex.FEMALE;
+      }
       Employee fantasticEmployee = new Employee(rs.getLong("employee_id"),
                                                 rs.getString("firstname"),
                                                 rs.getString("lastname"),
                                                 rs.getDate("enrollment_date").toLocalDate(),
-                                                (Sex) rs.getObject("sex"));
+                                                sexy);
       return fantasticEmployee;
    }
    private Department departmentFromRaw(ResultSet rs) throws SQLException{    //department_id, name, mail, max_capacity,
@@ -100,15 +122,31 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
       Department amabileDepartment = new Department(rs.getLong("department_id"),
                                                     rs.getString("name"),
                                                     rs.getString("mail"),
-                                                    rs.getInt("max_capacity"));
+                                                    rs.getInt("max_capacity")
+                                                   );
       //aggiungo l'impiegato al department
-      amabileDepartment.addEmployee(employeeFromRawWithoutDepartment(rs));
-//      aggiungo il department all' impiegato
-      amabileDepartment.getEmployees().last().setDepartment(amabileDepartment);
+      if ((Long) rs.getLong("employee_id") != null)
+      {
+         Employee emplo = employeeFromRawWithoutDepartment(rs);
+         amabileDepartment.addEmployee(emplo);
+         //aggiungo il department all' impiegato
+         amabileDepartment.getEmployees().get(emplo.getId()).setDepartment(amabileDepartment);
+      }
       return amabileDepartment;
    }
+   private boolean hasEmployeeDepartment(long id) throws SQLException {
+      try (PreparedStatement ps = conn.prepareStatement(COUNT_DEPARTEMENT_EMPLOYEE)){
+         ps.setLong(1,id);
+         try (ResultSet rs = ps.executeQuery()){
+            rs.next();
+            return rs.getInt(1) > 0;
+         }
+      }
+   }
+
+
    /**
-    * private valoreDiRitorno metodo(ps(che sarebbe la queri parametrizzata, ?lambdaCheMappaUnaRiga?, oggettoDaCreare, args dell'oggetto))){}
+    * Private valoreDiRitorno nomeMetodo(ps(che sarebbe la query parametrizzata, ?lambdaCheMappaUnaRiga?, oggettoDaCreare, args dell'oggetto))){}
     */
 //* 3. (Opzionale) Creare due metodi per selezionare oggetti:
 //         *   a. Uno prende una query parametrizzata, una lambda RawMapper che descriva come mappare una riga del ResultSet e

@@ -22,7 +22,7 @@ CREATE TABLE employee
    lastname          VARCHAR(32)    NOT NULL,
    enrollment_date   DATE               NULL,
    sex               sex                NULL,
-   department_id     BIGINT         NOT NULL,
+   department_id     BIGINT             NULL, --fatto apposta per poter cancellare il department
    CONSTRAINT PK_employee PRIMARY KEY(employee_id),
    CONSTRAINT FK_employee_department FOREIGN KEY(department_id)
       REFERENCES department(department_id)

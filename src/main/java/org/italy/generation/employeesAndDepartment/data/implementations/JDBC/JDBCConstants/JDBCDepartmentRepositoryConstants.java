@@ -9,14 +9,27 @@ public class JDBCDepartmentRepositoryConstants {
           VALUES (nextval('department_sequence'), ?, ?, ?)
           RETURNING department_id;
           """;
+   public static final String DELETE_DEPARTMENT_BY_ID_AND_NULL_IN_EMPLOYEE = """
+          UPDATE employee
+          SET department_id = NULL
+          WHERE department_id = ?;
+          
+          DELETE FROM department
+          WHERE department_id = ?
+          """;
    public static final String DELETE_DEPARTMENT_BY_ID = """
           DELETE FROM department
+          WHERE department_id = ?
+          """;
+   public static String COUNT_DEPARTEMENT_EMPLOYEE = """
+          SELECT COUNT (department_id)
+          FROM employee
           WHERE department_id = ?
           """;
    public static final String DEPARTMENTS_FROM_PART_NAME = """
           SELECT department_id, name, mail, max_capacity,
                  employee_id, firstname, lastname, enrollment_date, sex
-          FROM department JOIN employee
+          FROM department LEFT OUTER JOIN employee
           USING (department_id)
           WHERE name LIKE ?
           """;

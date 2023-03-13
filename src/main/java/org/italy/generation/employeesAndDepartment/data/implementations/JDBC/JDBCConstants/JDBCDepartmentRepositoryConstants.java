@@ -21,6 +21,11 @@ public class JDBCDepartmentRepositoryConstants {
           DELETE FROM department
           WHERE department_id = ?
           """;
+   public static final String SET_DEPARTMENT_NULL_EMPLOYEE = """
+          UPDATE employee
+          SET department_id = NULL
+          WHERE department_id = ?;
+          """;
    public static String COUNT_DEPARTEMENT_EMPLOYEE = """
           SELECT COUNT (department_id)
           FROM employee
@@ -32,6 +37,11 @@ public class JDBCDepartmentRepositoryConstants {
           FROM department LEFT OUTER JOIN employee
           USING (department_id)
           WHERE name LIKE ?
+          """;
+   public static final String DEPARTMENT_FIND_BY_ID = """
+          SELECT department_id, name, mail, max_capacity
+          FROM department
+          WHERE department_id = ?  
           """;
 
 }

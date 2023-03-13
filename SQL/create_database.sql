@@ -26,6 +26,7 @@ CREATE TABLE employee
    CONSTRAINT PK_employee PRIMARY KEY(employee_id),
    CONSTRAINT FK_employee_department FOREIGN KEY(department_id)
       REFERENCES department(department_id)
+      ON DELETE SET NULL  --ON DELETE CASCADE
 );
 CREATE SEQUENCE employee_sequence
 OWNED BY employee.employee_id;

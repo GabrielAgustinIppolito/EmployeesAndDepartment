@@ -6,8 +6,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.sql.*;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 
 import static org.italy.generation.employeesAndDepartment.data.implementations.JDBC.TestConstants.*;
@@ -86,7 +84,7 @@ class JDBCDepartmentRepositoryTest {
              ResultSet rs = st.executeQuery(COUNT_DEPARTMENT)){
             rs.next();
             assertTrue(rs.getInt(1) == 2);
-            Long newLong = repo.departmentInsert(department_aux);
+            Long newLong = repo.insert(department_aux);
             try(Statement st2 = conn.createStatement();
                ResultSet rs2 = st2.executeQuery(COUNT_DEPARTMENT)){
                rs2.next();
@@ -115,7 +113,7 @@ class JDBCDepartmentRepositoryTest {
             try(ResultSet rs = ps.executeQuery()){
                rs.next();
                Long idCheGioia = rs.getLong("department_id");
-               assertTrue(repo.deleteDepartmentById(idCheGioia));
+               assertTrue(repo.deleteById(idCheGioia));
             }
          }
          try(Statement st = conn.createStatement();
@@ -123,10 +121,10 @@ class JDBCDepartmentRepositoryTest {
             rs.next();
             assertTrue(rs.getInt(1) == 1);
          }
-         newLong = repo.departmentInsert(department_aux);
+         newLong = repo.insert(department_aux);
          System.out.println(newLong);
          assertNotNull(newLong);
-         assertTrue(repo.deleteDepartmentById(newLong));
+         assertTrue(repo.deleteById(newLong));
       } catch (SQLException e) {
          throw new RuntimeException(e);
       }
@@ -147,7 +145,7 @@ class JDBCDepartmentRepositoryTest {
          System.out.println("********* Parte 1 *********");
          System.out.println("********** della **********");
          System.out.println("***************************");
-         Iterable<Department> departmentList = repo.departmentsFromPartName("della");
+         Iterable<Department> departmentList = repo.departmentsByNameLike("della");
          departmentList.forEach(department -> System.out.println(department.toString()));
          //NonSoComeControllare
          List<Department> ld = (List <Department>) departmentList;
@@ -156,7 +154,7 @@ class JDBCDepartmentRepositoryTest {
          System.out.println("********* Parte 2 *********");
          System.out.println("*********** lic ***********");
          System.out.println("***************************");
-         departmentList = repo.departmentsFromPartName("lic");
+         departmentList = repo.departmentsByNameLike("lic");
          departmentList.forEach(department -> System.out.println(department.toString()));
          ld = (List <Department>) departmentList;
          assertTrue(ld.size() == 1);
@@ -164,7 +162,7 @@ class JDBCDepartmentRepositoryTest {
          System.out.println("********* Parte 3 *********");
          System.out.println("*********** tu ***********");
          System.out.println("***************************");
-         departmentList = repo.departmentsFromPartName("rc");
+         departmentList = repo.departmentsByNameLike("rc");
          departmentList.forEach(department -> System.out.println(department.toString()));
          ld = (List <Department>) departmentList;
          assertTrue(ld.size() == 1);
@@ -173,7 +171,7 @@ class JDBCDepartmentRepositoryTest {
          System.out.println("********* Parte 4 *********");
          System.out.println("*********** 00 ***********");
          System.out.println("***************************");
-         departmentList = repo.departmentsFromPartName("00");
+         departmentList = repo.departmentsByNameLike("00");
          departmentList.forEach(department -> System.out.println(department.toString()));
          ld = (List <Department>) departmentList;
          assertTrue(ld.size() == 0);

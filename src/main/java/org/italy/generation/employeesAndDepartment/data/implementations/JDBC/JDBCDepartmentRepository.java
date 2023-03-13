@@ -1,6 +1,8 @@
 package org.italy.generation.employeesAndDepartment.data.implementations.JDBC;
 
 import org.italy.generation.employeesAndDepartment.data.abstractions.DepartmentRepository;
+import org.italy.generation.employeesAndDepartment.data.abstractions.PSSetter;
+import org.italy.generation.employeesAndDepartment.data.abstractions.RSRowMapper;
 import org.italy.generation.employeesAndDepartment.entities.Department;
 import org.italy.generation.employeesAndDepartment.entities.Employee;
 import org.italy.generation.employeesAndDepartment.entities.Sex;
@@ -16,94 +18,151 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
    public JDBCDepartmentRepository (Connection connection) {
       this.conn = connection;
    }
+   public Optional<Department> findById(long id) throws SQLException{
+      return queryForObject(DEPARTMENT_FIND_BY_ID, rs->
+         new Department(rs.getLong("department_id"),
+                               rs.getString("name"),
+                               rs.getString("mail"),
+                               rs.getInt("max_capacity"))
+      ,id);
+   }
+   public Optional<Department> findById2(long id) throws SQLException{
+      return queryForObject(DEPARTMENT_FIND_BY_ID, this::fromResultSet,id);
+   }
+   public Department fromResultSet (ResultSet rs) throws SQLException{
+      return new Department(rs.getLong("department_id"),
+            rs.getString("name"),
+            rs.getString("mail"),
+            rs.getInt("max_capacity"));
+   }
+   public Optional<Department> findById3(long id) throws SQLException{
+      return queryForObject(DEPARTMENT_FIND_BY_ID,
+            ps -> ps.setLong(1,id),
+            rs->
+                  new Department(rs.getLong("department_id"),
+                        rs.getString("name"),
+                        rs.getString("mail"),
+                        rs.getInt("max_capacity"))
+                  );
+   }
    @Override
-   public long departmentInsert(Department department) throws SQLException {
+   public long insert(Department department) throws SQLException {
       try (PreparedStatement ps = conn.prepareStatement(INSERT_DEPARTMENT_RETURNING_ID,
                                                         Statement.RETURN_GENERATED_KEYS)){
          ps.setString(1, department.getName());
          ps.setString(2, department.getMail());
          ps.setInt(3, department.getMaxCapacity());
-         int rawUpdated =ps.executeUpdate();
-         if (rawUpdated != 1){
-            throw new SQLException("Errore nell'aggiunta del dipartimento");
-         }
+         ps.executeUpdate();
          try (ResultSet keys = ps.getGeneratedKeys()){
             keys.next();
-            return keys.getLong(1);
+            long key = keys.getLong(1);
+            department.setId(key);
+            return key;
          }
-      } catch (SQLException e) {
-         e.printStackTrace();
-         throw new SQLException("Errore nell'inserimento del dipartimento. ",  e);
       }
    }
 
+//   @Override
+//   public boolean deleteById(long id) throws SQLException {
+////      se il dipartimento non è presente nei dipendenti cancella direttamente
+//      int rowUpdated;
+//      if (departmentHasEmployees(id)) {
+//         try (PreparedStatement ps = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID_AND_NULL_IN_EMPLOYEE)) {
+//            ps.setLong(1, id);
+//            ps.setLong(2, id);
+//            rowUpdated = ps.executeUpdate();
+//            if (rowUpdated >= 2) {
+//               return true;
+//            }
+//         }
+//      } else {
+//         try (PreparedStatement ps = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID)) {
+//            ps.setLong(1, id);
+//            rowUpdated = ps.executeUpdate();
+//            if (rowUpdated == 1) {
+//               return true;
+//            }
+//         }
+//      }
+//      //se le rawUpdated non sono quelle sopra
+//      return false;
+//   }
    @Override
-   public boolean deleteDepartmentById(long id) throws SQLException {
+   public boolean deleteById(long id) throws SQLException {
 //      se il dipartimento non è presente nei dipendenti cancella direttamente
-      int rawUpdated;
-      if (hasEmployeeDepartment(id)) {
-         try (PreparedStatement ps = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID_AND_NULL_IN_EMPLOYEE)) {
-            ps.setLong(1, id);
-            ps.setLong(2, id);
-            rawUpdated = ps.executeUpdate();
-//            System.out.println("Raw updated: " + rawUpdated);
-            if (rawUpdated == 2) {
-               return true;
-            }
-         }
-      } else {
-         try (PreparedStatement ps = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID)) {
-            ps.setLong(1, id);
-            rawUpdated = ps.executeUpdate();
-            if (rawUpdated == 1) {
-               return true;
-            }
-         }
+      try (PreparedStatement setDepNull = conn.prepareStatement(SET_DEPARTMENT_NULL_EMPLOYEE);
+           PreparedStatement delDep = conn.prepareStatement(DELETE_DEPARTMENT_BY_ID)) {
+         setDepNull.setLong(1, id);
+         int empRemoved = setDepNull.executeUpdate(); //Numero degli impiegati a cui è stato settato null il dipartimento
+         delDep.setLong(1, id);
+         int depDeleted = delDep.executeUpdate();
+         return depDeleted == 1;
       }
-      //se le rawUpdated non sono quelle sopra
-      return false;
+   }
+   @Override
+   public boolean deleteById(Department department) throws SQLException {
+      return deleteById(department.getId());
    }
 
    @Override
-   public boolean deleteDepartmentById(Department department) throws SQLException {
-      return deleteDepartmentById(department.getId());
-   }
-
-   @Override
-   public Iterable<Department> departmentsFromPartName(String part) throws SQLException {
-      part = String.format("%%%s%%", part);
-      List<Department> departmentList = new ArrayList<>();
+//   public Iterable<Department> departmentsByNameLike(String part) throws SQLException {
+////      part = String.format("%%%s%%", part);
+//      String partLike = "%" + part + "%";
+//      List<Department> departmentList = new ArrayList<>();
+//      try (PreparedStatement ps = conn.prepareStatement(DEPARTMENTS_FROM_PART_NAME)) {
+//         ps.setString(1, partLike);
+//         try(ResultSet rs = ps.executeQuery()){
+//            while (rs.next()) {
+//               long idDep = rs.getLong("department_id");
+//               boolean departmentIsPresent = departmentList.stream()
+//                     .anyMatch(department ->
+//                           department.getId() == idDep);
+//               if (departmentIsPresent) {
+//                  if (rs.getLong("employee_id") != 0) {
+//                     for (int i = 0; i < departmentList.size(); i++) {
+//                        Employee e = employeeFromRowWithoutDepartment(rs);
+//                        e.setDepartment(departmentList.get(i));
+//                        //aggiungo al departament il suo impiegato
+//                        departmentList.get(i).addEmployee(e);
+//                     }
+//                  }
+//               } else {
+//                  //aggiungo il nuovo department nella lista di department
+//                  departmentList.add(departmentFromRaw(rs));
+//               }
+//            }
+//         }
+//      }
+//      return departmentList;
+//   }
+   public Iterable<Department> departmentsByNameLike(String part) throws SQLException {
+//      part = String.format("%%%s%%", part);
+      String partLike = "%" + part + "%";
+      Map<Long,Department> departmentMap = new HashMap<>();
       try (PreparedStatement ps = conn.prepareStatement(DEPARTMENTS_FROM_PART_NAME)) {
-         ps.setString(1, part);
-         ResultSet rs = ps.executeQuery();
-         while (rs.next()) {
-            long idMoltoBelloESimpatico = rs.getLong("department_id");
-            boolean departmentIsPresent = departmentList.stream()
-                  .anyMatch(department ->
-                        department.getId().longValue() == idMoltoBelloESimpatico);
-            //secondo intellij tornerà sempre falso, secondo me è scemo
-            if (departmentIsPresent) {
-               if ((Long) rs.getLong("employee_id") != null) {
-                  for (int i = 0; i < departmentList.size(); i++) {
-                     Employee e = employeeFromRawWithoutDepartment(rs);
-                     e.setDepartment(departmentList.get(i));
-                     //aggiungo al departament il suo impiegato
-                     departmentList.get(i).addEmployee(e);
-//                  //all'ultimo impiegato aggiunto ↑ gli setto il suo department (puntatore del dep...)
-//                  departmentList.get(i).getEmployees().last().setDepartment(departmentList.get(i));
-                  }
+         ps.setString(1, partLike);
+         try(ResultSet rs = ps.executeQuery()){
+            while (rs.next()){
+               //Leggo l'id del dipartimento, chiedo alla mappa di darmi quel dipartimento
+               //se me lo da e c'è un impiegato, aggiungo un impiegato al ripartimento che
+               //mi ha dato la mappa
+               //Se non è presente creo il dipartimento, gli aggiungo l'impiegato se presente
+               //poi aggiungo il dipartimento alla mappa
+               long idDepartment = rs.getLong("department_id");
+               Department found = departmentMap.get(idDepartment);
+               if (found != null){
+                  found.addEmployee(employeeFromRow(rs));
+               } else  {
+                  Department newDepartment = departmentWithEmployeeFromRow(rs);
+                  departmentMap.put(newDepartment.getId(), newDepartment);
                }
-            } else {
-               //aggiungo il nuovo department nella lista di department
-               departmentList.add(departmentFromRaw(rs));
             }
-
          }
       }
-      return departmentList;
+      return departmentMap.values();
    }
 
-   private Employee employeeFromRawWithoutDepartment(ResultSet rs) throws SQLException {    //employee_id, firstname, lastname, enrollment_date, sex, department_id
+   private Employee employeeFromRow(ResultSet rs) throws SQLException {    //employee_id, firstname, lastname, enrollment_date, sex, department_id
       Sex sexy = Sex.UNDEFINED;
       if(rs.getObject("sex").toString().equalsIgnoreCase("male")){
          sexy = Sex.MALE;
@@ -117,7 +176,7 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
                                                 sexy);
       return fantasticEmployee;
    }
-   private Department departmentFromRaw(ResultSet rs) throws SQLException{    //department_id, name, mail, max_capacity,
+   private Department departmentWithEmployeeFromRow(ResultSet rs) throws SQLException{    //department_id, name, mail, max_capacity,
       //creo il department
       Department amabileDepartment = new Department(rs.getLong("department_id"),
                                                     rs.getString("name"),
@@ -125,16 +184,16 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
                                                     rs.getInt("max_capacity")
                                                    );
       //aggiungo l'impiegato al department
-      if ((Long) rs.getLong("employee_id") != null)
+      if (rs.getLong("employee_id") != 0)
       {
-         Employee emplo = employeeFromRawWithoutDepartment(rs);
+         Employee emplo = employeeFromRow(rs);
          amabileDepartment.addEmployee(emplo);
          //aggiungo il department all' impiegato
-         amabileDepartment.getEmployees().get(emplo.getId()).setDepartment(amabileDepartment);
+         emplo.setDepartment(amabileDepartment);
       }
       return amabileDepartment;
    }
-   private boolean hasEmployeeDepartment(long id) throws SQLException {
+   private boolean departmentHasEmployees(long id) throws SQLException {
       try (PreparedStatement ps = conn.prepareStatement(COUNT_DEPARTEMENT_EMPLOYEE)){
          ps.setLong(1,id);
          try (ResultSet rs = ps.executeQuery()){
@@ -144,32 +203,71 @@ public class JDBCDepartmentRepository implements DepartmentRepository {
       }
    }
 
+   public <T> Optional<T> queryForObject(String query, RSRowMapper<T> mapper, Object... params) throws SQLException{
+      try(PreparedStatement ps = conn.prepareStatement(query)){
+         for(int i = 0; i < params.length; i++){
+            if(params[i] instanceof Enum<?>){
+               ps.setObject(i+1, params[i], Types.OTHER);
+            } else {
+               ps.setObject(i+1, params[i]);
+            }
+         }
+         try(ResultSet rs = ps.executeQuery()){
+            if (rs.next()){
+               T result = mapper.mapRow(rs);
+               return Optional.of(result);
+            } else {
+               return Optional.empty();
+            }
+         }
+      }
+   }
 
-   /**
-    * Private valoreDiRitorno nomeMetodo(ps(che sarebbe la query parametrizzata, ?lambdaCheMappaUnaRiga?, oggettoDaCreare, args dell'oggetto))){}
-    */
-//* 3. (Opzionale) Creare due metodi per selezionare oggetti:
-//         *   a. Uno prende una query parametrizzata, una lambda RawMapper che descriva come mappare una riga del ResultSet e
-//   l' oggetto da creare, e i var args relativi all'oggetto da creare
-//*   b. Un altro prende una query parametrizzata, una lambda StatementSetter che prende in input il PreparedStatement
-//   e ne setta i parametri necessari, infine la lambda RawMapper (senza i var args perché ci penserà StatementSetter)
-//   RowMapper<Person> rowMapper = (rs, rowNum) -> {
-//      Person p = new Person();
-//      p.setName(rs.getString("personName"));
-//      p.setAddress(rs.getString("address"));
-//      p.setAge(rs.getInt("age"));
-//      return p;
-//   };
-//
+   public <T> Optional<T> queryForObject (String query, PSSetter setter, RSRowMapper<T> mapper) throws SQLException{
+      try(PreparedStatement ps = conn.prepareStatement(query)){
+         setter.setParams(ps);
+         try(ResultSet rs = ps.executeQuery()){
+            if (rs.next()){
+               T result = mapper.mapRow(rs);
+               return Optional.of(result);
+            } else {
+               return Optional.empty();
+            }
+         }
+      }
+   }
 
-//   public static void main(String[] args) {
-//      System.out.println("Hello World");
-//      String nice = String.format("%%%s%%", "hello sexy"); //diventa %hello sexy%
-//      System.out.println(nice);
-//   }
-
+   public <T> List<T> query(String q, RSRowMapper<T> mapper, Object... params) throws SQLException{
+      try(PreparedStatement ps = conn.prepareStatement(q)){
+         for(int i = 0; i < params.length; i++){
+            if(params[i] instanceof Enum<?>){
+               ps.setObject(i+1, params[i], Types.OTHER);
+            } else {
+               ps.setObject(i+1, params[i]);
+            }
+         }
+         try(ResultSet rs = ps.executeQuery()){
+            List<T> result = new ArrayList<>();
+            while (rs.next()){
+               T element = mapper.mapRow(rs);
+               result.add(element);
+            }
+            return result;
+         }
+      }
+   }
 }
 
+//
+//   a. Uno prende una query parametrizzata, una lambda RawMapper che descriva come mappare una riga
+//   del ResultSet e
+//   l' oggetto da creare, e i var args relativi all'oggetto da creare
+//*   b. Un altro prende una query parametrizzata, una lambda StatementSetter che prende in input il
+//    PreparedStatement e ne setta i parametri necessari, infine la lambda RawMapper (senza i var
+//    args perché ci penserà StatementSetter)
+
+
+//scoprire perché sichiama Template la JDBCTemplate, cos'è il design pattern Template
 
 
 
